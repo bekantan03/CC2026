@@ -1,0 +1,6 @@
+{
+  "name": "Cerdas Cermat Biologi SMA",
+  "description": "Aplikasi belajar interaktif biologi SMA lengkap dengan materi kurikulum, ilustrasi diagram, latihan soal HOTS & esai, evaluasi kompetensi, serta unduh materi PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
