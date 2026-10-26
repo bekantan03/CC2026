@@ -15,18 +15,29 @@ import {
   Flame,
   HelpCircle,
   FileSpreadsheet,
+  ShieldCheck,
+  GraduationCap,
+  Bell,
+  Megaphone,
 } from 'lucide-react';
 import { SubMateri } from '../types/biology';
 import { allSubMateriList } from '../data/allMateri';
 import { getStoredAttempts } from '../utils/storage';
 import { exportCompleteCoursePdf, exportSingleSubMateriPdf } from '../utils/pdfExport';
+import { useAuth } from '../context/AuthContext';
 
 interface HomeViewProps {
   onSelectSubMateri: (id: string, initialTab?: 'materi' | 'latihan' | 'hasil') => void;
   onOpenGoogleSheets?: () => void;
+  onOpenAdminDashboard?: () => void;
 }
 
-export const HomeView: React.FC<HomeViewProps> = ({ onSelectSubMateri, onOpenGoogleSheets }) => {
+export const HomeView: React.FC<HomeViewProps> = ({
+  onSelectSubMateri,
+  onOpenGoogleSheets,
+  onOpenAdminDashboard,
+}) => {
+  const { currentUser, role, announcements, setIsLoginModalOpen } = useAuth();
   const attempts = getStoredAttempts();
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
@@ -67,7 +78,81 @@ export const HomeView: React.FC<HomeViewProps> = ({ onSelectSubMateri, onOpenGoo
   };
 
   return (
-    <div className="space-y-8 sm:space-y-12 pb-16">
+    <div className="space-y-8 sm:space-y-10 pb-16">
+      {/* Active User Greeting & Role Banner */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold shrink-0 ${
+              role === 'guru' ? 'bg-purple-600' : 'bg-emerald-600'
+            }`}
+          >
+            {role === 'guru' ? (
+              <ShieldCheck className="w-5 h-5" />
+            ) : (
+              <GraduationCap className="w-5 h-5" />
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+                Sedang Masuk Sebagai:
+              </span>
+              <span
+                className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                  role === 'guru'
+                    ? 'bg-purple-100 text-purple-800'
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}
+              >
+                {role === 'guru' ? 'Guru (Admin)' : `Siswa (${currentUser?.kelas || 'SMA'})`}
+              </span>
+            </div>
+            <h3 className="font-extrabold text-slate-800 text-sm sm:text-base">
+              {currentUser?.name || 'Pengguna'}
+            </h3>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {role === 'guru' && onOpenAdminDashboard && (
+            <button
+              onClick={onOpenAdminDashboard}
+              className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Buka Dashboard Guru</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsLoginModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-bold transition-colors cursor-pointer"
+          >
+            Ganti Akun (Siswa/Guru)
+          </button>
+        </div>
+      </div>
+
+      {/* Teacher Announcements Banner (if any) */}
+      {announcements.length > 0 && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-pink-50 border border-purple-200 shadow-2xs space-y-2">
+          <div className="flex items-center gap-2 text-xs font-extrabold text-purple-900 uppercase tracking-wider">
+            <Megaphone className="w-4 h-4 text-purple-600 animate-bounce" />
+            <span>Pengumuman dari Guru Biologi:</span>
+          </div>
+          {announcements.slice(0, 1).map((ann) => (
+            <div key={ann.id} className="text-xs sm:text-sm text-slate-700 pl-6">
+              <strong className="text-slate-900 block font-bold">{ann.title}</strong>
+              <p className="mt-0.5 leading-relaxed text-slate-600">{ann.content}</p>
+              <span className="text-[11px] text-purple-700 font-semibold mt-1 block">
+                — {ann.authorName} ({ann.createdAt})
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Hero Welcome Banner */}
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 text-white p-6 sm:p-10 lg:p-12 shadow-xl shadow-emerald-900/10">
         <div className="absolute -right-12 -bottom-12 w-80 h-80 rounded-full bg-white/10 blur-2xl pointer-events-none" />

@@ -1,14 +1,32 @@
 import React, { useState } from 'react';
-import { BookOpen, Download, Home, Sparkles, CheckCircle2, ChevronRight, Award, User, FileSpreadsheet } from 'lucide-react';
+import {
+  BookOpen,
+  Download,
+  Home,
+  Sparkles,
+  CheckCircle2,
+  ChevronRight,
+  Award,
+  User,
+  FileSpreadsheet,
+  Share2,
+  Check,
+  ShieldCheck,
+  GraduationCap,
+  LogIn,
+  LogOut,
+} from 'lucide-react';
 import { allSubMateriList } from '../data/allMateri';
 import { exportCompleteCoursePdf } from '../utils/pdfExport';
-import { getStudentName, saveStudentName } from '../utils/storage';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   currentSubMateriId: string | null;
   onNavigateHome: () => void;
   onSelectSubMateri: (id: string) => void;
   onOpenGoogleSheets: () => void;
+  onOpenAdminDashboard: () => void;
+  isAdminViewActive: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,12 +34,25 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateHome,
   onSelectSubMateri,
   onOpenGoogleSheets,
+  onOpenAdminDashboard,
+  isAdminViewActive,
 }) => {
+  const { currentUser, role, setIsLoginModalOpen, logout } = useAuth();
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState('');
   const [downloadPercent, setDownloadPercent] = useState(0);
-  const [studentName, setStudentName] = useState(() => getStudentName());
-  const [isEditingName, setIsEditingName] = useState(false);
+  const [hasCopiedLink, setHasCopiedLink] = useState(false);
+
+  const handleCopyShareLink = () => {
+    const url = 'https://ais-pre-4y6gapz6fgsk564ndrujha-748720420352.asia-southeast1.run.app';
+    navigator.clipboard.writeText(url).then(() => {
+      setHasCopiedLink(true);
+      setTimeout(() => setHasCopiedLink(false), 2500);
+    }).catch(() => {
+      // Fallback
+      prompt('Salin tautan aplikasi ini:', url);
+    });
+  };
 
   const handleDownloadAll = async () => {
     setIsDownloading(true);
@@ -43,13 +74,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         }, 1200);
       }
     }, 100);
-  };
-
-  const handleSaveName = (newName: string) => {
-    const trimmed = newName.trim() || 'Siswa Berprestasi';
-    setStudentName(trimmed);
-    saveStudentName(trimmed);
-    setIsEditingName(false);
   };
 
   const currentSub = allSubMateriList.find((s) => s.id === currentSubMateriId);
@@ -100,28 +124,75 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Actions */}
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* Student Name Pill */}
-              <div className="relative">
-                {isEditingName ? (
-                  <input
-                    type="text"
-                    defaultValue={studentName}
-                    autoFocus
-                    onBlur={(e) => handleSaveName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSaveName(e.currentTarget.value)}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
-                  />
-                ) : (
-                  <button
-                    onClick={() => setIsEditingName(true)}
-                    title="Klik untuk mengubah nama siswa"
-                    className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 transition-colors"
-                  >
-                    <User className="w-3.5 h-3.5 text-emerald-600" />
-                    <span className="max-w-[100px] sm:max-w-[130px] truncate">{studentName}</span>
-                  </button>
-                )}
+              {/* Role-Based User / Guru Pill & Switcher */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setIsLoginModalOpen(true)}
+                  title="Klik untuk ganti akun (Siswa / Guru)"
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    role === 'guru'
+                      ? 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-200'
+                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-200'
+                  }`}
+                >
+                  {role === 'guru' ? (
+                    <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                  ) : (
+                    <GraduationCap className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  )}
+                  <span className="max-w-[120px] sm:max-w-[150px] truncate">
+                    {currentUser?.name || 'Pengguna'}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-md font-extrabold bg-white/80 border border-slate-200/80">
+                    {role === 'guru' ? 'Guru' : currentUser?.kelas || 'Siswa'}
+                  </span>
+                </button>
+
+                <button
+                  onClick={logout}
+                  title="Keluar dari akun dan kembali ke menu login"
+                  className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
               </div>
+
+              {/* If Guru: Button to Dashboard Guru */}
+              {role === 'guru' && (
+                <button
+                  onClick={onOpenAdminDashboard}
+                  className={`flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-extrabold transition-all cursor-pointer ${
+                    isAdminViewActive
+                      ? 'bg-purple-700 text-white shadow-md'
+                      : 'bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4 text-purple-300" />
+                  <span className="hidden sm:inline">
+                    {isAdminViewActive ? 'Tutup Dashboard' : 'Dashboard Guru'}
+                  </span>
+                  <span className="sm:hidden">Admin</span>
+                </button>
+              )}
+
+              {/* Bagikan Link Aplikasi Button */}
+              <button
+                onClick={handleCopyShareLink}
+                title="Salin tautan aplikasi publik untuk dibagikan ke siswa"
+                className="flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 transition-all cursor-pointer"
+              >
+                {hasCopiedLink ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>Tautan Tersalin!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 text-sky-600" />
+                    <span className="hidden sm:inline">Bagikan Link</span>
+                  </>
+                )}
+              </button>
 
               {/* Google Sheets Integration Button */}
               <button
