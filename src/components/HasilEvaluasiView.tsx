@@ -214,6 +214,43 @@ export const HasilEvaluasiView: React.FC<HasilEvaluasiViewProps> = ({
         </div>
       </div>
 
+      {/* Google Sheets Sync Highlight Banner */}
+      {onOpenGoogleSheetsToSave && (
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-white border-2 border-emerald-300 rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 text-center sm:text-left">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-600/20">
+              <FileSpreadsheet className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-sm sm:text-base text-emerald-950">
+                Kirim Nilai Ini ke Google Sheet Guru
+              </h4>
+              <p className="text-xs text-emerald-800">
+                Nama Siswa: <strong>{getStudentName()}</strong> • Nilai Akhir: <strong>{evaluation.totalScore} / 100</strong>
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() =>
+              onOpenGoogleSheetsToSave({
+                studentName: getStudentName(),
+                subMateriTitle: subMateri.title,
+                pgScore: Math.round(evaluation.pgScore),
+                essayScore: Math.round(evaluation.essayScore),
+                totalScore: evaluation.totalScore,
+                masteryLevel: evaluation.masteryLevel,
+                mode: attempt.mode,
+              })
+            }
+            className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Simpan ke Google Sheet Guru</span>
+          </button>
+        </div>
+      )}
+
       {/* 2. Capaian Per Tujuan Pembelajaran (Grafik Batang) */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">

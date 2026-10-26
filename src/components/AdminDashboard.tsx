@@ -20,11 +20,15 @@ import {
   Key,
   GraduationCap,
   Sparkles,
+  ExternalLink,
+  UploadCloud,
 } from 'lucide-react';
+import { getSavedSpreadsheetId } from '../utils/googleSheets';
+import { StudentScoreRecord } from '../types/auth';
 
 interface AdminDashboardProps {
   onBackToStudentView: () => void;
-  onOpenGoogleSheets: () => void;
+  onOpenGoogleSheets: (batchScores?: StudentScoreRecord[]) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -119,7 +123,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={onOpenGoogleSheets}
+            onClick={() => onOpenGoogleSheets()}
             className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -132,6 +136,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <GraduationCap className="w-4 h-4" />
             <span>Lihat Tampilan Siswa</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Google Sheets Sync Prominent Hub */}
+      <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-emerald-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="space-y-1.5 max-w-2xl">
+          <div className="flex items-center gap-2">
+            <span className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">
+              <FileSpreadsheet className="w-4 h-4" />
+            </span>
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+              Pusat Sinkronisasi Google Sheet Guru
+            </span>
+            {getSavedSpreadsheetId() && (
+              <span className="text-[10px] bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 px-2 py-0.5 rounded-full font-bold">
+                Spreadsheet Terhubung
+              </span>
+            )}
+          </div>
+          <h3 className="text-lg sm:text-xl font-black text-white">
+            Kirim Rekap Nilai Siswa ke Google Drive & Sheets Anda
+          </h3>
+          <p className="text-xs sm:text-sm text-emerald-100/80 leading-relaxed">
+            {getSavedSpreadsheetId()
+              ? `Spreadsheet siap menerima data. Klik tombol di kanan untuk menyinkronkan seluruh riwayat (${filteredScores.length} data nilai) ke Google Sheet.`
+              : 'Belum ada Spreadsheet yang terhubung. Klik tombol di kanan untuk membuat Google Spreadsheet baru otomatis dengan 1-klik.'}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {getSavedSpreadsheetId() && (
+            <a
+              href={`https://docs.google.com/spreadsheets/d/${getSavedSpreadsheetId()}/edit`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-colors"
+            >
+              <span>Buka Sheet</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
+
+          <button
+            onClick={() => onOpenGoogleSheets(filteredScores)}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-500/25 transition-all cursor-pointer"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Kirim {filteredScores.length} Nilai ke Google Sheet</span>
           </button>
         </div>
       </div>
@@ -202,11 +255,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
 
             <button
-              onClick={onOpenGoogleSheets}
+              onClick={() => onOpenGoogleSheets(filteredScores)}
               className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-xs font-bold text-emerald-800 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Sinkron Google Sheet</span>
+              <span>Sinkron {filteredScores.length} Nilai ke Google Sheet</span>
             </button>
           </div>
         </div>

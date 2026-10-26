@@ -38,6 +38,7 @@ function MainAppContent() {
     masteryLevel: string;
     mode: string;
   } | null>(null);
+  const [pendingBatchScoresToSave, setPendingBatchScoresToSave] = useState<any[] | null>(null);
 
   // GATEKEEPER CHECK: Jika belum login, tampilkan layar login gerbang utama (Siswa vs Guru)
   if (!isLoggedIn || !currentUser) {
@@ -59,8 +60,9 @@ function MainAppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleOpenGoogleSheets = () => {
+  const handleOpenGoogleSheets = (batchScores?: any[]) => {
     setPendingResultToSave(null);
+    setPendingBatchScoresToSave(batchScores || null);
     setIsSheetsModalOpen(true);
   };
 
@@ -89,6 +91,7 @@ function MainAppContent() {
       });
     }
 
+    setPendingBatchScoresToSave(null);
     setPendingResultToSave(result);
     setIsSheetsModalOpen(true);
   };
@@ -106,7 +109,7 @@ function MainAppContent() {
         currentSubMateriId={selectedSubMateriId}
         onNavigateHome={handleNavigateHome}
         onSelectSubMateri={(id) => handleSelectSubMateri(id, 'materi')}
-        onOpenGoogleSheets={handleOpenGoogleSheets}
+        onOpenGoogleSheets={() => handleOpenGoogleSheets()}
         onOpenAdminDashboard={handleToggleAdminDashboard}
         isAdminViewActive={isAdminDashboardOpen}
       />
@@ -116,7 +119,7 @@ function MainAppContent() {
         {isAdminDashboardOpen && role === 'guru' ? (
           <AdminDashboard
             onBackToStudentView={() => setIsAdminDashboardOpen(false)}
-            onOpenGoogleSheets={handleOpenGoogleSheets}
+            onOpenGoogleSheets={(batchScores) => handleOpenGoogleSheets(batchScores)}
           />
         ) : selectedSub ? (
           <SubMateriDetail
@@ -130,7 +133,7 @@ function MainAppContent() {
         ) : (
           <HomeView
             onSelectSubMateri={handleSelectSubMateri}
-            onOpenGoogleSheets={handleOpenGoogleSheets}
+            onOpenGoogleSheets={() => handleOpenGoogleSheets()}
             onOpenAdminDashboard={handleToggleAdminDashboard}
           />
         )}
@@ -147,6 +150,7 @@ function MainAppContent() {
         isOpen={isSheetsModalOpen}
         onClose={() => setIsSheetsModalOpen(false)}
         pendingResultToSave={pendingResultToSave}
+        pendingBatchScoresToSave={pendingBatchScoresToSave}
       />
 
       {/* Footer */}
@@ -170,7 +174,7 @@ function MainAppContent() {
             </button>
             <span>•</span>
             <button
-              onClick={handleOpenGoogleSheets}
+              onClick={() => handleOpenGoogleSheets()}
               className="text-emerald-700 font-bold hover:underline flex items-center gap-1 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />

@@ -4,10 +4,12 @@ import { auth, initAuth, googleSignIn, logout, getAccessToken } from '../utils/g
 import {
   createStudentGradeSpreadsheet,
   appendStudentResultToSheet,
+  appendBatchScoresToSheet,
   fetchStudentRecordsFromSheet,
   getSavedSpreadsheetId,
   setSavedSpreadsheetId,
 } from '../utils/googleSheets';
+import { StudentScoreRecord } from '../types/auth';
 import {
   FileSpreadsheet,
   CheckCircle2,
@@ -19,6 +21,9 @@ import {
   X,
   HelpCircle,
   Table,
+  UploadCloud,
+  ArrowRight,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface GoogleSheetsModalProps {
@@ -33,6 +38,7 @@ interface GoogleSheetsModalProps {
     masteryLevel: string;
     mode: string;
   } | null;
+  pendingBatchScoresToSave?: StudentScoreRecord[] | null;
   onSaveSuccess?: (url: string) => void;
 }
 
@@ -40,6 +46,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   isOpen,
   onClose,
   pendingResultToSave,
+  pendingBatchScoresToSave,
   onSaveSuccess,
 }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(auth.currentUser);
@@ -50,9 +57,9 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [sheetRecords, setSheetRecords] = useState<string[][]>([]);
-  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string; url?: string } | null>(null);
 
-  // Mandatory confirmation dialog state for mutating Google Sheet
+  // Mandatory confirmation dialog state for mutating Google Sheet (Workspace Guidelines)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   useEffect(() => {
@@ -92,11 +99,17 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
       const res = await googleSignIn();
       if (res) {
         setCurrentUser(res.user);
-        setStatusMsg({ type: 'success', text: `Berhasil terhubung sebagai ${res.user.displayName || res.user.email}` });
+        setStatusMsg({
+          type: 'success',
+          text: `Berhasil terhubung dengan Google sebagai ${res.user.displayName || res.user.email}!`,
+        });
       }
     } catch (err: any) {
       console.error(err);
-      setStatusMsg({ type: 'error', text: err.message || 'Gagal masuk dengan akun Google.' });
+      setStatusMsg({
+        type: 'error',
+        text: err.message || 'Gagal masuk dengan akun Google. Pastikan pop-up browser tidak diblokir.',
+      });
     } finally {
       setIsSigningIn(false);
     }
@@ -117,7 +130,8 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
       setSpreadsheetId(newId);
       setStatusMsg({
         type: 'success',
-        text: 'Google Spreadsheet baru berhasil dibuat dan siap menampung nilai siswa!',
+        text: 'Google Spreadsheet baru berhasil dibuat di Google Drive Anda!',
+        url: spreadsheetUrl,
       });
       loadRecords(newId);
     } catch (err: any) {
@@ -137,31 +151,56 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
     }
 
     if (!cleanId) {
-      setStatusMsg({ type: 'error', text: 'Masukkan ID atau URL Google Spreadsheet yang valid.' });
+      setStatusMsg({ type: 'error', text: 'Silakan masukkan ID atau Link Google Spreadsheet yang valid.' });
       return;
     }
 
     setSpreadsheetId(cleanId);
     setSavedSpreadsheetId(cleanId);
     setInputSheetId('');
-    setStatusMsg({ type: 'success', text: 'ID Spreadsheet berhasil disimpan!' });
+    setStatusMsg({
+      type: 'success',
+      text: 'ID Spreadsheet berhasil disimpan!',
+      url: `https://docs.google.com/spreadsheets/d/${cleanId}/edit`,
+    });
     loadRecords(cleanId);
   };
 
   const executeSaveToSheet = async () => {
-    if (!pendingResultToSave || !spreadsheetId) return;
+    if (!spreadsheetId) return;
     setIsSaving(true);
     setStatusMsg(null);
 
     try {
-      const { spreadsheetUrl } = await appendStudentResultToSheet(spreadsheetId, pendingResultToSave);
-      setStatusMsg({
-        type: 'success',
-        text: `Nilai siswa "${pendingResultToSave.studentName}" berhasil disimpan ke Google Sheets!`,
-      });
-      loadRecords(spreadsheetId);
-      if (onSaveSuccess) onSaveSuccess(spreadsheetUrl);
-      setShowConfirmDialog(false);
+      if (pendingBatchScoresToSave && pendingBatchScoresToSave.length > 0) {
+        // Save multiple batch scores from teacher dashboard
+        const { updatedRows, spreadsheetUrl } = await appendBatchScoresToSheet(
+          spreadsheetId,
+          pendingBatchScoresToSave
+        );
+        setStatusMsg({
+          type: 'success',
+          text: `Berhasil menambahkan ${updatedRows} baris nilai siswa ke Google Sheet!`,
+          url: spreadsheetUrl,
+        });
+        loadRecords(spreadsheetId);
+        if (onSaveSuccess) onSaveSuccess(spreadsheetUrl);
+        setShowConfirmDialog(false);
+      } else if (pendingResultToSave) {
+        // Save single student result
+        const { spreadsheetUrl } = await appendStudentResultToSheet(
+          spreadsheetId,
+          pendingResultToSave
+        );
+        setStatusMsg({
+          type: 'success',
+          text: `Nilai siswa "${pendingResultToSave.studentName}" berhasil disimpan ke Google Sheets!`,
+          url: spreadsheetUrl,
+        });
+        loadRecords(spreadsheetId);
+        if (onSaveSuccess) onSaveSuccess(spreadsheetUrl);
+        setShowConfirmDialog(false);
+      }
     } catch (err: any) {
       console.error(err);
       setStatusMsg({ type: 'error', text: err.message || 'Gagal menulis ke Google Sheet.' });
@@ -174,7 +213,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in-95 duration-200 my-8">
         {/* Close Button */}
         <button
@@ -191,10 +230,10 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
           </div>
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Integrasi Google Sheets
+              Integrasi Google Sheets Guru
             </h2>
             <p className="text-xs sm:text-sm text-slate-500">
-              Simpan rekapitulasi nilai dan hasil kerja siswa secara langsung ke Google Drive & Sheets.
+              Sinkronisasi nilai kuis siswa langsung ke Google Drive & Spreadsheet Anda.
             </p>
           </div>
         </div>
@@ -202,7 +241,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
         {/* Status Message */}
         {statusMsg && (
           <div
-            className={`p-4 rounded-2xl mb-6 text-xs sm:text-sm flex items-start gap-3 ${
+            className={`p-4 rounded-2xl mb-6 text-xs sm:text-sm flex flex-col gap-2 ${
               statusMsg.type === 'success'
                 ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
                 : statusMsg.type === 'error'
@@ -210,12 +249,26 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 : 'bg-blue-50 text-blue-900 border border-blue-200'
             }`}
           >
-            {statusMsg.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2.5">
+              {statusMsg.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              )}
+              <div className="font-semibold">{statusMsg.text}</div>
+            </div>
+
+            {statusMsg.url && (
+              <a
+                href={statusMsg.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition-colors"
+              >
+                <span>Buka Google Spreadsheet Sekarang</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
             )}
-            <div>{statusMsg.text}</div>
           </div>
         )}
 
@@ -224,7 +277,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Status Akun Google:
+                1. Akun Google Pengampu / Guru:
               </p>
               {currentUser ? (
                 <div className="flex items-center gap-2 mt-1">
@@ -237,14 +290,14 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                   )}
                   <div>
                     <span className="font-extrabold text-sm text-slate-800">
-                      {currentUser.displayName || 'Guru / Siswa'}
+                      {currentUser.displayName || 'Guru Biologi'}
                     </span>
                     <span className="text-xs text-slate-500 ml-1.5">({currentUser.email})</span>
                   </div>
                 </div>
               ) : (
                 <p className="text-xs text-slate-600 mt-1">
-                  Belum masuk. Masuk untuk mengizinkan aplikasi menulis ke Google Sheets Anda.
+                  Belum terhubung. Masuk dengan Google untuk memberi izin aplikasi menulis ke Spreadsheet Anda.
                 </p>
               )}
             </div>
@@ -255,7 +308,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Keluar Akun</span>
+                <span>Keluar Akun Google</span>
               </button>
             ) : (
               /* Official Google Sign In Button */
@@ -293,7 +346,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
           <div className="space-y-4 mb-6">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-700">
-                Pilih atau Buat Spreadsheet Rekap Nilai:
+                2. Spreadsheet Google Drive Penampung Nilai:
               </label>
               {spreadsheetId && (
                 <a
@@ -316,7 +369,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                   </div>
                   <div className="truncate">
                     <p className="text-xs font-bold text-emerald-950">
-                      Spreadsheet Terhubung:
+                      Spreadsheet Terhubung & Siap Menerima Nilai:
                     </p>
                     <p className="text-xs font-mono text-emerald-800 truncate">
                       ID: {spreadsheetId}
@@ -326,7 +379,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
                 <button
                   onClick={() => setSpreadsheetId('')}
-                  className="text-xs font-bold text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg bg-white border border-slate-200 shrink-0"
+                  className="text-xs font-bold text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg bg-white border border-slate-200 shrink-0 cursor-pointer"
                 >
                   Ganti
                 </button>
@@ -336,13 +389,13 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 <button
                   onClick={handleCreateNewSheet}
                   disabled={isCreatingSheet}
-                  className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50 active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   <span>
                     {isCreatingSheet
                       ? 'Sedang Membuat Spreadsheet Baru...'
-                      : 'Buat Spreadsheet Rekap Nilai Baru Otomatis'}
+                      : 'Buat Spreadsheet Rekap Nilai Baru Otomatis (1-Klik)'}
                   </span>
                 </button>
 
@@ -366,12 +419,12 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
           </div>
         )}
 
-        {/* 3. Action to Save Pending Quiz Result */}
-        {pendingResultToSave && currentUser && spreadsheetId && (
+        {/* 3. Action to Save Pending Quiz Result (Single Student) */}
+        {pendingResultToSave && (
           <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 space-y-3 mb-6">
             <div className="flex items-center justify-between">
               <span className="text-xs font-extrabold text-amber-900 uppercase tracking-wide">
-                Siap Disimpan ke Google Sheet:
+                3. Data Kuis Siswa Siap Disimpan:
               </span>
               <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900">
                 Nilai Akhir: {pendingResultToSave.totalScore}
@@ -380,36 +433,111 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
             <div className="text-xs text-slate-700 space-y-1">
               <p>
-                <strong>Siswa:</strong> {pendingResultToSave.studentName}
+                <strong>Nama Siswa:</strong> {pendingResultToSave.studentName}
               </p>
               <p>
-                <strong>Materi:</strong> {pendingResultToSave.subMateriTitle}
+                <strong>Sub Materi:</strong> {pendingResultToSave.subMateriTitle}
               </p>
               <p>
-                <strong>Rincian:</strong> PG {pendingResultToSave.pgScore} | Esai{' '}
+                <strong>Rincian Nilai:</strong> PG {pendingResultToSave.pgScore} | Esai{' '}
                 {pendingResultToSave.essayScore} | Kategori: {pendingResultToSave.masteryLevel}
               </p>
             </div>
 
-            {/* Save Button triggers Mandatory Explicit Confirmation Dialog */}
-            <button
-              onClick={() => setShowConfirmDialog(true)}
-              disabled={isSaving}
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Simpan Nilai Ini ke Google Sheet Sekarang</span>
-            </button>
+            {!currentUser ? (
+              <div className="pt-2">
+                <button
+                  onClick={handleSignIn}
+                  disabled={isSigningIn}
+                  className="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  <span>Masuk dengan Google Dahulu untuk Menyimpan</span>
+                </button>
+              </div>
+            ) : !spreadsheetId ? (
+              <div className="pt-2">
+                <button
+                  onClick={handleCreateNewSheet}
+                  disabled={isCreatingSheet}
+                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Buat Spreadsheet & Simpan Nilai Ini</span>
+                </button>
+              </div>
+            ) : (
+              /* Save Button triggers Mandatory Explicit Confirmation Dialog */
+              <button
+                onClick={() => setShowConfirmDialog(true)}
+                disabled={isSaving}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>Simpan Nilai Siswa Ini ke Google Sheet Sekarang</span>
+              </button>
+            )}
           </div>
         )}
 
-        {/* 4. Live Preview of Existing Records in Sheet */}
+        {/* 4. Action to Save Batch Records (From Teacher Admin Dashboard) */}
+        {pendingBatchScoresToSave && pendingBatchScoresToSave.length > 0 && (
+          <div className="p-5 rounded-2xl bg-purple-50 border border-purple-200 space-y-3 mb-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-extrabold text-purple-900 uppercase tracking-wide">
+                3. Sinkronisasi Massal Nilai Seluruh Kelas:
+              </span>
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-purple-200 text-purple-900">
+                {pendingBatchScoresToSave.length} Baris Data
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Seluruh riwayat nilai yang dikerjakan siswa akan diekspor sekaligus ke dalam Google Spreadsheet guru.
+            </p>
+
+            {!currentUser ? (
+              <div className="pt-2">
+                <button
+                  onClick={handleSignIn}
+                  disabled={isSigningIn}
+                  className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  <span>Masuk Akun Google Guru Terlebih Dahulu</span>
+                </button>
+              </div>
+            ) : !spreadsheetId ? (
+              <div className="pt-2">
+                <button
+                  onClick={handleCreateNewSheet}
+                  disabled={isCreatingSheet}
+                  className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Buat Spreadsheet Rekap Guru & Kirim Seluruh Data</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowConfirmDialog(true)}
+                disabled={isSaving}
+                className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50"
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>Kirim {pendingBatchScoresToSave.length} Nilai Siswa ke Google Sheet</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 5. Live Preview of Existing Records in Sheet */}
         {spreadsheetId && currentUser && sheetRecords.length > 0 && (
           <div className="space-y-2 border-t border-slate-200 pt-4">
             <div className="flex items-center justify-between text-xs font-bold text-slate-700">
               <div className="flex items-center gap-1.5">
                 <Table className="w-4 h-4 text-emerald-600" />
-                <span>Pratinjau Data di Spreadsheet ({sheetRecords.length - 1} Baris Data):</span>
+                <span>Pratinjau Data di Spreadsheet ({sheetRecords.length - 1} Baris Nilai):</span>
               </div>
               <button
                 onClick={() => loadRecords(spreadsheetId)}
@@ -425,7 +553,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
               <table className="w-full text-left">
                 <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0">
                   <tr>
-                    {sheetRecords[0]?.slice(0, 7).map((col, idx) => (
+                    {sheetRecords[0]?.slice(0, 8).map((col, idx) => (
                       <th key={idx} className="p-2 whitespace-nowrap">
                         {col}
                       </th>
@@ -435,7 +563,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 <tbody className="divide-y divide-slate-100">
                   {sheetRecords.slice(1).map((row, rIdx) => (
                     <tr key={rIdx} className="hover:bg-slate-50">
-                      {row.slice(0, 7).map((cell, cIdx) => (
+                      {row.slice(0, 8).map((cell, cIdx) => (
                         <td key={cIdx} className="p-2 whitespace-nowrap text-slate-600">
                           {cell}
                         </td>
@@ -448,17 +576,17 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
           </div>
         )}
 
-        {/* 5. Teacher Explanation / Guidance Box */}
+        {/* 6. Teacher Guidance Box */}
         <div className="mt-6 pt-4 border-t border-slate-100 flex items-start gap-2.5 text-xs text-slate-500">
           <HelpCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
           <p className="leading-relaxed">
-            <strong>Cara Kerja:</strong> Aplikasi menggunakan Google Sheets API resmi untuk menambahkan satu baris nilai baru setiap kali siswa menyelesaikan latihan. File spreadsheet tersimpan aman langsung di Google Drive Anda sendiri dan dapat diunduh sebagai file Excel (XLSX) atau dibagikan ke siswa lain.
+            <strong>Catatan untuk Guru:</strong> File rekap nilai tersimpan langsung di Google Drive Anda. Anda dapat membuka, mengedit, mencetak, atau membagikan link Google Sheets tersebut kepada kepala sekolah atau pengawas.
           </p>
         </div>
       </div>
 
       {/* MANDATORY USER CONFIRMATION DIALOG (FOR MUTATING WORKSPACE DATA) */}
-      {showConfirmDialog && pendingResultToSave && (
+      {showConfirmDialog && (
         <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
             <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
@@ -470,21 +598,25 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 Konfirmasi Penyimpanan ke Google Sheet
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                Apakah Anda yakin ingin menambahkan 1 baris nilai berikut ke dalam Google Spreadsheet Anda?
+                {pendingBatchScoresToSave
+                  ? `Apakah Anda yakin ingin menambahkan ${pendingBatchScoresToSave.length} baris nilai siswa ke dalam Google Spreadsheet Anda?`
+                  : `Apakah Anda yakin ingin menambahkan 1 baris nilai berikut ke dalam Google Spreadsheet Anda?`}
               </p>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
-              <p>
-                <strong>Nama Siswa:</strong> {pendingResultToSave.studentName}
-              </p>
-              <p>
-                <strong>Sub Materi:</strong> {pendingResultToSave.subMateriTitle}
-              </p>
-              <p>
-                <strong>Nilai Akhir:</strong> {pendingResultToSave.totalScore} ({pendingResultToSave.masteryLevel})
-              </p>
-            </div>
+            {pendingResultToSave && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1">
+                <p>
+                  <strong>Nama Siswa:</strong> {pendingResultToSave.studentName}
+                </p>
+                <p>
+                  <strong>Sub Materi:</strong> {pendingResultToSave.subMateriTitle}
+                </p>
+                <p>
+                  <strong>Nilai Akhir:</strong> {pendingResultToSave.totalScore} ({pendingResultToSave.masteryLevel})
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center gap-3 pt-2">
               <button
@@ -498,7 +630,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 disabled={isSaving}
                 className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs transition-colors cursor-pointer shadow-md disabled:opacity-50"
               >
-                {isSaving ? 'Menyimpan...' : 'Ya, Simpan Nilai'}
+                {isSaving ? 'Menyimpan...' : 'Ya, Simpan ke Google Sheet'}
               </button>
             </div>
           </div>
